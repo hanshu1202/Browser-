@@ -1,0 +1,71 @@
+name: Record Site Visit
+
+# Trigger manually from the Actions tab, and pass a URL + how long to stay
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to visit'
+        required: true
+        type: string
+      duration:
+        description: 'Seconds to stay on the page'
+        required: false
+        default: '60'
+        type: string
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install real Google Chrome, Xvfb, and ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ffmpeg
+          wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y /tmp/chrome.deb
+          google-chrome --version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Selenium
+        run: pip install selenium
+
+      - name: Start virtual display (Xvfb)
+        # GitHub's runners have no physical monitor, so Chrome needs a virtual
+        # framebuffer to draw into. Chrome itself still runs windowed/real,
+        # not in --headless mode.
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 2
+
+      - name: Start screen recording
+        run: |
+          ffmpeg -y -video_size 1920x1080 -framerate 25 -f x11grab -i :99 \
+            -codec:v libx264 -pix_fmt yuv420p /tmp/recording.mp4 &
+          echo $! > /tmp/ffmpeg.pid
+          sleep 2
+
+      - name: Visit site with real Chrome
+        run: python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}"
+
+      - name: Stop recording cleanly
+        run: |
+          kill -INT "$(cat /tmp/ffmpeg.pid)"
+          sleep 3
+
+      - name: Upload recording as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-visit-recording
+          path: /tmp/recording.mp4
+          retention-days: 14
