@@ -1,6 +1,4 @@
 name: Record Site Visit
-
-# Trigger manually from the Actions tab, and pass a URL + how long to stay
 on:
   workflow_dispatch:
     inputs:
@@ -17,11 +15,13 @@ on:
 jobs:
   record:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 15 # Increased timeout for login
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
 
       - name: Install real Google Chrome, Xvfb, and ffmpeg
         run: |
@@ -29,7 +29,6 @@ jobs:
           sudo apt-get install -y xvfb ffmpeg
           wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y /tmp/chrome.deb
-          google-chrome --version
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,19 +51,9 @@ jobs:
           echo $! > /tmp/ffmpeg.pid
           sleep 2
 
-      - name: Write session cookies from secret
-        env:
-          SITE_COOKIES: ${{ secrets.SITE_COOKIES }}
-        if: ${{ env.SITE_COOKIES != '' }}
-        run: echo "$SITE_COOKIES" > /tmp/cookies.json
-
       - name: Visit site with real Chrome
         run: |
-          if [ -f /tmp/cookies.json ]; then
-            python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}" /tmp/cookies.json
-          else
-            python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}"
-          fi
+          python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}"
 
       - name: Stop recording cleanly
         run: |
