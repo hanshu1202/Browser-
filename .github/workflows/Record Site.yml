@@ -55,8 +55,17 @@ jobs:
           echo $! > /tmp/ffmpeg.pid
           sleep 2
 
+      - name: Write session cookies from secret
+        if: ${{ secrets.SITE_COOKIES != '' }}
+        run: echo '${{ secrets.SITE_COOKIES }}' > /tmp/cookies.json
+
       - name: Visit site with real Chrome
-        run: python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}"
+        run: |
+          if [ -f /tmp/cookies.json ]; then
+            python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}" /tmp/cookies.json
+          else
+            python scripts/visit_site.py "${{ inputs.url }}" "${{ inputs.duration }}"
+          fi
 
       - name: Stop recording cleanly
         run: |
